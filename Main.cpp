@@ -1,5 +1,6 @@
 // Servo - Version: 1.1.4
 #include <Servo.h>
+#include <EnableInterrupt.h>
 
 //Updated to use the Arduino Mega as the main processor for the Batmobile
 
@@ -25,6 +26,7 @@
 #define STEERING_POT_MAX 764
 #define RADIO_STEER_MIN 1220
 #define RADIO_STEER_MAX 1880
+#define SCALED_STEERING_DEADBAND 10
 
 #define GAS_PRESS_THRESHOLD 500
 #define BRAKE_PRESS_THRESHOLD 500
@@ -64,7 +66,7 @@
 
 #define CONTROL_MODE_LIGHT_PERIOD 13//
 
-#define DEBUG_REPORT_PERIOD 1
+#define DEBUG_REPORT_PERIOD 10
 
 #define REMOTE_ENABLE_PWM_THRESHOLD 127
 
@@ -117,11 +119,11 @@ const int rearEncoderAnglePin = 15; //direction pin on rear encoder
 //Note: leaving interrupts 20 and 21 open as these are the I2C pins on the Mega
 
 //Radio inputs - these are for reading PWM values over the radio. These are digital inputs.
-const int radioThrottlePin = 22; //Y from trigger throttle on controller
-const int radioSteeringPin = 24; //X from wheel on controller
-const int radioDriftModePin = 26; //remote drift button
-const int radioSystemEnablePin = 28; //radio remote enable
-const int radioLightingPin = 30;
+const int radioThrottlePin = A14; //Y from trigger throttle on controller
+const int radioSteeringPin = A15; //X from wheel on controller
+const int radioDriftModePin = A12; //remote drift button
+const int radioSystemEnablePin = A13; //radio remote enable
+const int radioLightingPin = A11; //radio lighting?
 
 //Set up PWM outputs for the motors (and legacy turn linear actuator)
 Servo rightFrontMotor;// 9
@@ -136,7 +138,8 @@ void setup(){
 pinMode(localSystemEnablePin, INPUT);
 pinMode(driftControlPin, INPUT);
 pinMode(systemEnabledSignalLight,OUTPUT);
-pinMode(radioLightingPin, INPUT);
+//pinMode(radioLightingPin, INPUT);
+enableInterrupt(radioLightingPin, handleInterruptLighting, CHANGE);
 
 pinMode(shiftGreenOut, OUTPUT);
 pinMode(shiftRedOut, OUTPUT);
@@ -163,10 +166,16 @@ pinMode(rearEncoderAnglePin, INPUT);
 
 
 //Set up radios
-pinMode(radioThrottlePin, INPUT);
-pinMode(radioSteeringPin, INPUT);
-pinMode(radioDriftModePin, INPUT);
-pinMode(radioSystemEnablePin, INPUT);
+//pinMode(radioThrottlePin, INPUT);
+//pinMode(radioSteeringPin, INPUT);
+enableInterrupt(radioThrottlePin, handleInterruptThrottle, CHANGE);
+enableInterrupt(radioSteeringPin, handleInterruptSteering, CHANGE);
+
+//pinMode(radioDriftModePin, INPUT);
+//pinMode(radioSystemEnablePin, INPUT);
+enableInterrupt(radioDriftModePin, handleInterruptDriftMode, CHANGE);
+enableInterrupt(radioSystemEnablePin, handleInterruptSystemEnable, CHANGE);
+
 
 //Set up motors
 rightFrontMotor.attach(rightFrontMotorPin);
@@ -175,15 +184,118 @@ rearMotor.attach(rearMotorPin);
 turnLinearActuator.attach(turnLinearActuatorPin);
 
 //Set up dashboard
-Serial.begin(115200);
+Serial.begin(57600);
 }
 
-int readRadioInput(int inputPin){
+
+boolean pulseWasDetectedSteering = 0;
+int pulseStartSteering = 0;
+int pulseEndSteering = 0;
+int pulseWidthSteering = 0;
+
+boolean pulseWasDetectedThrottle = 0;
+int pulseStartThrottle = 0;
+int pulseEndThrottle = 0;
+int pulseWidthThrottle = 0;
+
+boolean pulseWasDetectedDriftMode = 0;
+int pulseStartDriftMode = 0;
+int pulseEndDriftMode = 0;
+int pulseWidthDriftMode = 0;
+
+boolean pulseWasDetectedSystemEnable = 0;
+int pulseStartSystemEnable = 0;
+int pulseEndSystemEnable = 0;
+int pulseWidthSystemEnable = 0;
+
+boolean pulseWasDetectedLighting = 0;
+int pulseStartLighting = 0;
+int pulseEndLighting = 0;
+int pulseWidthLighting = 0;
+
+
+void handleInterruptSteering(){
+  if(!pulseWasDetectedSteering){
+    pulseStartSteering = micros();
+    pulseWasDetectedSteering = 1;
+  }
+  else{
+    pulseEndSteering = micros();
+    pulseWasDetectedSteering = 0;
+    pulseWidthSteering = pulseEndSteering-pulseStartSteering;
+    pulseStartSteering = 0;
+    pulseEndSteering = 0;
+  }
+}
+
+void handleInterruptThrottle(){
+  if(!pulseWasDetectedThrottle){
+    pulseStartThrottle = micros();
+    pulseWasDetectedThrottle = 1;
+  }
+  else{
+    pulseEndThrottle = micros();
+    pulseWasDetectedThrottle = 0;
+    pulseWidthThrottle = pulseEndThrottle-pulseStartThrottle;
+    pulseStartThrottle = 0;
+    pulseEndThrottle = 0;
+  }
   
-  unsigned long inputPulseDuration =  pulseIn(inputPin, HIGH);
+}
+
+void handleInterruptDriftMode(){
+  if(!pulseWasDetectedDriftMode){
+    pulseStartDriftMode = micros();
+    pulseWasDetectedDriftMode = 1;
+  }
+  else{
+    pulseEndDriftMode = micros();
+    pulseWasDetectedDriftMode = 0;
+    pulseWidthDriftMode = pulseEndDriftMode-pulseStartDriftMode;
+    pulseStartDriftMode = 0;
+    pulseEndDriftMode = 0;
+  }
+}
+
+void handleInterruptSystemEnable(){
+  if(!pulseWasDetectedSystemEnable){
+    pulseStartSystemEnable = micros();
+    pulseWasDetectedSystemEnable = 1;
+  }
+  else{
+    pulseEndSystemEnable = micros();
+    pulseWasDetectedSystemEnable = 0;
+    pulseWidthSystemEnable = pulseEndSystemEnable-pulseStartSystemEnable;
+    pulseStartSystemEnable = 0;
+    pulseEndSystemEnable = 0;
+  }
+  
+}
+
+void handleInterruptLighting(){
+  if(!pulseWasDetectedLighting){
+    pulseStartLighting = micros();
+    pulseWasDetectedLighting = 1;
+  }
+  else{
+    pulseEndLighting = micros();
+    pulseWasDetectedLighting = 0;
+    pulseWidthLighting = pulseEndLighting-pulseStartLighting;
+    pulseStartLighting = 0;
+    pulseEndLighting = 0;
+  }
+  
+}
+
+
+int scaleRadioInput(int pulseWidth){
+  
+  
     //if there is a pulse being read of some kind that matches the duration we are looking for:
-    if (inputPulseDuration > 875 && inputPulseDuration < 2085){
-      int mappedValue = map(inputPulseDuration,1220,1880,-127,127);
+    if (pulseWidth > 875 && pulseWidth < 2085){
+
+     
+      int mappedValue = map(pulseWidth,RADIO_STEER_MIN,RADIO_STEER_MAX,-127,127);
     if (mappedValue>127){
       return 127;
     }
@@ -208,6 +320,26 @@ int readRadioInput(int inputPin){
     
  
   
+}
+
+int getThrottleRadio(){
+  return scaleRadioInput(pulseWidthThrottle);
+}
+
+int getSteeringRadio(){
+  return scaleRadioInput(pulseWidthSteering);
+}
+
+int getDriftModeRadio(){
+  return scaleRadioInput(pulseWidthDriftMode);
+}
+
+int getSystemEnableRadio(){
+  return scaleRadioInput(pulseWidthSystemEnable);
+}
+
+int getLightingRadio(){
+  return scaleRadioInput(pulseWidthLighting);
 }
 
 int clipMotorOutput(int output, int max) {
@@ -307,12 +439,14 @@ int getStickShiftPosition() {
 }
 
 bool isKidDrivingEnabled(){
-
+/*
   int KidEnabled = pulseIn(radioSystemEnablePin, HIGH);
   if (KidEnabled > 1700) { 
     return true;
   }
  else return false;
+ */
+ return false;
 
 }
  
@@ -321,12 +455,14 @@ bool isKidDrivingEnabled(){
 
    //WP Changes Below
 bool radioControlIsEnabled(){ 
-    int RadioEnabled = pulseIn(radioSystemEnablePin, HIGH);
+  /*
+  int RadioEnabled = pulseIn(radioSystemEnablePin, HIGH);
   if (1700 > RadioEnabled && RadioEnabled < 1400) { 
     return true;
   }
  else return false;
-  
+  */
+  return true;
 
 }
 
@@ -335,34 +471,22 @@ int getSteeringWheelPosition(int steeringPot) {
   int retVal;
 
   float steeringPotValue = analogRead(steeringPot);
-  //float centeredValue = steeringPotValue - 0.5*(STEERING_POT_MAX + STEERING_POT_MIN);
-  float centeredValue = steeringPotValue - 0.5*(STEERING_POT_MAX + STEERING_POT_MIN);
-  float scaledSteeringPot = (STEERING_POT_MAX - STEERING_POT_MIN)/255;
-  if(fabs(centeredValue) < 100) {
+  
+  int scaledValue =  map(steeringPotValue,STEERING_POT_MIN,STEERING_POT_MAX,-127,127);
+  if(fabs(scaledValue) < SCALED_STEERING_DEADBAND) {
     retVal = 0;
   }
   else {
-    retVal = centeredValue / scaledSteeringPot;
+    retVal = scaledValue;
+   
   }
 
   return round(retVal);
 }
 
 int getRadioSteeringPosition(int radioSteeringPin) {
-  int retVal;
 
-  float radioPotValue = pulseIn(radioSteeringPin, HIGH);
-  //float centeredValue = steeringPotValue - 0.5*(STEERING_POT_MAX + STEERING_POT_MIN);
-  float centeredValue = radioPotValue - 0.5*(RADIO_STEER_MAX + RADIO_STEER_MIN);
-  float scaledRadioSteerPot = (RADIO_STEER_MAX - RADIO_STEER_MIN)/255;
-  if(fabs(centeredValue) < 100) {
-    retVal = 0;
-  }
-  else {
-    retVal = centeredValue / scaledRadioSteerPot;
-  }
-
-  return round(retVal);
+  return scaleRadioInput(pulseWidthSteering);
 }
 
 
@@ -592,7 +716,7 @@ void driveControlSchemeRadio(int stickShiftPosition, int boostMode, int driftMod
   int steer = getRadioSteeringPosition(radioSteeringPin);
   int speed = 0;
   //float potScalingFactor = (BRAKE_POT_MAX - BRAKE_POT_MIN)/127;//3.03
-  int throttle = readRadioInput(radioThrottlePin);
+  int throttle = pulseWidthThrottle//readRadioInput(radioThrottlePin);
 ;/*
   if(brakePedalValue > BRAKE_PRESS_THRESHOLD) {
     // brake is pressed
@@ -769,6 +893,7 @@ int getBoostMode() {
 int getDriftMode() {
   //drift - 6D
   int retVal;
+  /*
 if (pulseIn(radioDriftModePin, HIGH) > 1700){
   //if(vexRT[Btn6D] == 1) {
     retVal = DRIFT_ON;
@@ -776,7 +901,8 @@ if (pulseIn(radioDriftModePin, HIGH) > 1700){
   else {
     retVal = DRIFT_OFF;
   }
-
+*/
+retVal = DRIFT_OFF;
   return retVal;
 }
 
@@ -794,10 +920,17 @@ void setControlModeLight(int controlMode, int loopCount) {
       bool controlModeLightOutValue = !digitalRead(controlModeLightOut);
       digitalWrite(controlModeLightOut,controlModeLightOutValue);
     }*/
+      if((loopCount % CONTROL_MODE_LIGHT_PERIOD) == 0) {
+        bool controlModeLightOutValue = !digitalRead(controlModeLightOut);
+        digitalWrite(controlModeLightOut,controlModeLightOutValue);
+      }
+      
+      /*
       digitalWrite(controlModeLightOut, HIGH); // sets the digital pin 13 on
       delay(500);            // waits for a second
       digitalWrite(controlModeLightOut, LOW);  // sets the digital pin 13 off
       delay(500);
+      */
     break;
   case PARENT_CONTROL:
     digitalWrite(controlModeLightOut,0);
@@ -826,11 +959,13 @@ void setAuxiliaryLightingOne(){
 }
 */
 void setAuxiliaryLightingTwo(){
+  /*
   if(pulseIn(radioLightingPin, HIGH) < 1600) {
     digitalWrite(auxiliaryLightingTwo, 0);
   }
   else {digitalWrite(auxiliaryLightingTwo, HIGH);
   }
+  */
 }
 
 
@@ -857,9 +992,12 @@ void dashboard(){
   String brakePedalPotString = "Brake Pedal Pot: " +  String(analogRead(brakePedalPot));
   String gasPedalPotString = "Gas Pedal Pot:" + String(analogRead(gasPedalPot));
   String steeringPotString = "Steering Pot:" + String(analogRead(steeringPot));
-  String localSystemEnablePinString = "Kid Control Enabled (Pin 28) : " + String(pulseIn(radioSystemEnablePin, HIGH));
-  String radioThrottleString = "Radio Throttle PWM: " + String(readRadioInput(radioThrottlePin));
-  String radioSteeringString = "Radio Steering PWM: " + String(readRadioInput(radioSteeringPin));
+  
+  String radioThrottleString = "Radio Throttle PWM: " + String(getThrottleRadio());
+  String radioSteeringString = "Radio Steering PWM: " + String(getSteeringRadio());
+  String radioDriftModeString = "Radio Drift Mode PWM: " + String(getDriftModeRadio());
+  String radioSystemEnableString = "Radio System Enable PWM: " + String(getSystemEnableRadio());
+  String radioLightingString = "Radio Lighting PWM: " + String(getLightingRadio());
 
   String rightFrontMotorString = "RightFrontMotor: " +  String(map(rightFrontMotor.readMicroseconds(),1000,2000,-127,127));
   String leftFrontMotorString = "LeftFrontMotor:" + String(map(leftFrontMotor.readMicroseconds(),1000,2000,-127,127));
@@ -871,9 +1009,12 @@ void dashboard(){
   Serial.println(brakePedalPotString);
   Serial.println(gasPedalPotString);
   Serial.println(steeringPotString);
-  Serial.println(localSystemEnablePinString);
+  //Serial.println(localSystemEnablePinString);
   Serial.println(radioThrottleString);
   Serial.println(radioSteeringString);
+  Serial.println(radioDriftModeString);
+  Serial.println(radioSystemEnableString);
+  Serial.println(radioLightingString);
   Serial.println("********************************");
   Serial.println("Outputs:");
   Serial.println(rightFrontMotorString);
@@ -908,19 +1049,15 @@ void loop() {
     
     move(controlMode, controlScheme, stickShiftPosition, BOOST_ON, driftMode);
 
-    if((loopCount % ( DEBUG_REPORT_PERIOD * 10)) == 0) {
-      loopCount = 0;
+    if((loopCount % ( DEBUG_REPORT_PERIOD*10)) == 0) {
+      //loopCount = 0;
       dashboard();
     }
     loopCount++;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 
     //sleep for 30ms to approximate a periodic tick-through
     //wait1Msec(30);
     delay(10);
     
-  }
-  /*
-
-*/
-
+}
