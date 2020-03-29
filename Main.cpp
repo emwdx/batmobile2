@@ -184,7 +184,7 @@ rearMotor.attach(rearMotorPin);
 turnLinearActuator.attach(turnLinearActuatorPin);
 
 //Set up dashboard
-Serial.begin(57600);
+Serial.begin(115200);
 }
 
 
