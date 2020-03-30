@@ -187,7 +187,7 @@ turnLinearActuator.attach(turnLinearActuatorPin);
 Serial.begin(115200);
 }
 
-
+//Begin interrupt code to be used for reading the PWM values from radio inputs
 boolean pulseWasDetectedSteering = 0;
 int pulseStartSteering = 0;
 int pulseEndSteering = 0;
@@ -288,6 +288,7 @@ void handleInterruptLighting(){
 }
 
 
+//This function reads the pulse widths from the interrupt code and maps it to the range of -127 to 127.
 int scaleRadioInput(int pulseWidth){
   
   
@@ -317,11 +318,9 @@ int scaleRadioInput(int pulseWidth){
       return 0;
     }
     
-    
- 
-  
 }
 
+//These are utility functions that get the PWM values from the radio inputs
 int getThrottleRadio(){
   return scaleRadioInput(pulseWidthThrottle);
 }
@@ -341,6 +340,10 @@ int getSystemEnableRadio(){
 int getLightingRadio(){
   return scaleRadioInput(pulseWidthLighting);
 }
+
+
+//End Interrupt Code
+
 
 int clipMotorOutput(int output, int max) {
   if(output > 0 && output > max) {
@@ -439,8 +442,6 @@ int getStickShiftPosition() {
 }
 
 bool isKidDrivingEnabled(){
-
-  
   if (getSystemEnableRadio()<0) { 
     return true;
   }
