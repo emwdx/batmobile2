@@ -66,7 +66,7 @@
 
 #define CONTROL_MODE_LIGHT_PERIOD 13//
 
-#define DEBUG_REPORT_PERIOD 10
+#define DEBUG_REPORT_PERIOD 5
 
 #define REMOTE_ENABLE_PWM_THRESHOLD 127
 
@@ -439,30 +439,24 @@ int getStickShiftPosition() {
 }
 
 bool isKidDrivingEnabled(){
-/*
-  int KidEnabled = pulseIn(radioSystemEnablePin, HIGH);
-  if (KidEnabled > 1700) { 
+
+  
+  if (getSystemEnableRadio()<0) { 
     return true;
   }
  else return false;
- */
- return false;
+ 
 
 }
- 
-  //return (readRadioInput (radioSystemEnablePin)==HIGH );
-
 
    //WP Changes Below
 bool radioControlIsEnabled(){ 
-  /*
-  int RadioEnabled = pulseIn(radioSystemEnablePin, HIGH);
-  if (1700 > RadioEnabled && RadioEnabled < 1400) { 
+ 
+  if (getSystemEnableRadio()>100) { 
     return true;
   }
  else return false;
-  */
-  return true;
+ 
 
 }
 
@@ -893,16 +887,16 @@ int getBoostMode() {
 int getDriftMode() {
   //drift - 6D
   int retVal;
-  /*
-if (pulseIn(radioDriftModePin, HIGH) > 1700){
+
+if (getDriftModeRadio()>100){
   //if(vexRT[Btn6D] == 1) {
     retVal = DRIFT_ON;
   }
   else {
     retVal = DRIFT_OFF;
   }
-*/
-retVal = DRIFT_OFF;
+
+
   return retVal;
 }
 
